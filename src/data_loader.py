@@ -1,71 +1,56 @@
 from __future__ import annotations
+
 from pathlib import Path
 import pandas as pd
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "hvf_stats.xls"
 
-def _clean_column_name(column_name: object) -> str:
-    value = str(column_name).strip()
-    value = value.replace("Sorted ascSorted desc", "")
-    value = value.replace("Sorted desc", "")
-    value = value.replace("Sorted", "")
-    value = value.replace(" asc", "")
-    value = value.replace(" desc", "")
-    value = value.strip()
-    return value
 
-def load_data() -> pd.DataFrame:
-    """Load and clean the HVF statistics sheet."""
+def load_data() -> pd.DataFrame:    
     df = pd.read_excel(DATA_PATH, sheet_name=0, header=1)
 
     if df.empty:
         raise ValueError(f"The file {DATA_PATH} is empty or malformed.")
 
-    df = df.rename(columns={
-        df.columns[0]: "Surname",
-        df.columns[1]: "Name",
-        df.columns[2]: "Team",
-        df.columns[3]: "Game played",
-        df.columns[4]: "Sets played",
-        df.columns[5]: "Points",
-        df.columns[6]: "BP",
-        df.columns[7]: "GY-V",
-        df.columns[8]: "Missed serve",
-        df.columns[13]: "Ace",
-        df.columns[14]: "Receiving Error",
-        df.columns[20]: "Positive receiving %",
-        df.columns[21]: "Perfect receiving %",
-        df.columns[22]: "Attack Error",
-        df.columns[24]: "Attack blocked",
-        df.columns[28]: 'Attack %',
-        df.columns[34]: 'Block'
-    })
+    keep_columns = {
+        0: "Surname",
+        1: "Name",
+        2: "Team",
+        3: "Games",
+        4: "Sets",
+        5: "Points",
+        6: "BreakPoints",
+        7: "Wins-Losses",
+        8: "ServeErrors",      # S =
+        13: "Aces",            # S #
+        14: "ReceiveErrors",   # R =
+        20: "PositiveReceive%",  # +és#%
+        21: "PerfectReceive%",   # Kiv.%
+        22: "AttackErrors",    # A =
+        24: "AttackBlocked",   # A /
+        28: "Attack%",         # Tám%
+        34: "Blocks",          # B #
+    }
 
+    df = df.iloc[:, list(keep_columns.keys())].copy()
+    df.columns = list(keep_columns.values())
 
-
-    df.columns = [_clean_column_name(column) for column in df.columns]
     df = df.dropna(subset=["Surname"]).copy()
     df = df[~df["Surname"].astype(str).str.contains("Sorted", case=False, na=False)].copy()
-    df = df.replace(".", pd.NA)
 
     numeric_cols = [
-        "Game played", "Sets played", "Points", "BP", "GY-V",
-        "S =", "S !", "S /", "S -", "S +", "S #",
-        "R =", "R !", "R /", "R -", "R +", "R #",
-        "A =", "A !", "A /", "A -", "A +", "A #",
-        "B =", "B !", "B /", "B -", "B +", "B #",
+        "Games", "Sets", "Points", "BreakPoints", "Wins-Losses",
+        "ServeErrors", "Aces", "ReceiveErrors",
+        "AttackErrors", "AttackBlocked", "Blocks",
     ]
-
     for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    for col in ["+és#%", "Kiv.%", "Tám%"]:
-        if col in df.columns:
-            series = df[col].astype(str).str.replace("%", "", regex=False)
-            series = series.str.replace(",", ".", regex=False)
-            series = series.replace({".": pd.NA, "nan": pd.NA, "": pd.NA})
-            df[col] = pd.to_numeric(series, errors="coerce")
+    for col in ["PositiveReceive%", "PerfectReceive%", "Attack%"]:
+        series = df[col].astype(str).str.replace("%", "", regex=False)
+        series = series.str.replace(",", ".", regex=False)
+        series = series.replace({".": pd.NA, "nan": pd.NA, "": pd.NA})
+        df[col] = pd.to_numeric(series, errors="coerce")
 
     df["Player"] = (
         df["Surname"].astype(str).str.strip()
@@ -74,6 +59,9 @@ def load_data() -> pd.DataFrame:
     )
     df["Player"] = df["Player"].str.replace(r"\s+", " ", regex=True).str.strip()
 
+    df["PointsPerSet"] = df["Points"] / df["Sets"].replace(0, pd.NA)
+    df["AcesPerSet"] = df["Aces"] / df["Sets"].replace(0, pd.NA)
+    df["BlocksPerSet"] = df["Blocks"] / df["Sets"].replace(0, pd.NA)
 
     return df
 
@@ -81,5 +69,7 @@ def load_data() -> pd.DataFrame:
 if __name__ == "__main__":
     frame = load_data()
     print(frame.head().to_string(index=False))
-    print(frame.shape)
-    print(frame.columns.tolist())
+    print()
+    print("Shape:", frame.shape)
+    print()
+    print("Columns:", frame.columns.tolist())
