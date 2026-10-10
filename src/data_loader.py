@@ -5,8 +5,12 @@ import pandas as pd
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "hvf_stats.xls"
 
+MIN_GAMES = 5 
+MIN_SETS = 8   
 
-def load_data() -> pd.DataFrame:    
+
+def load_data() -> pd.DataFrame:
+    """Load and clean the HVF statistics sheet."""
     df = pd.read_excel(DATA_PATH, sheet_name=0, header=1)
 
     if df.empty:
@@ -38,6 +42,7 @@ def load_data() -> pd.DataFrame:
     df = df.dropna(subset=["Surname"]).copy()
     df = df[~df["Surname"].astype(str).str.contains("Sorted", case=False, na=False)].copy()
 
+    # --- Számos oszlopok konvertálása ---
     numeric_cols = [
         "Games", "Sets", "Points", "BreakPoints", "Wins-Losses",
         "ServeErrors", "Aces", "ReceiveErrors",
@@ -46,12 +51,20 @@ def load_data() -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # --- Százalékos oszlopok ---
     for col in ["PositiveReceive%", "PerfectReceive%", "Attack%"]:
         series = df[col].astype(str).str.replace("%", "", regex=False)
         series = series.str.replace(",", ".", regex=False)
         series = series.replace({".": pd.NA, "nan": pd.NA, "": pd.NA})
         df[col] = pd.to_numeric(series, errors="coerce")
 
+    before = len(df)
+    df = df[(df["Games"] > MIN_GAMES) & (df["Sets"] >= MIN_SETS)].copy()
+    after = len(df)
+    print(f"[data_loader] Szűrés: {before} -> {after} játékos "
+          f"(Games > {MIN_GAMES}, Sets >= {MIN_SETS})")
+
+    # --- Teljes név ---
     df["Player"] = (
         df["Surname"].astype(str).str.strip()
         + " "
@@ -59,6 +72,7 @@ def load_data() -> pd.DataFrame:
     )
     df["Player"] = df["Player"].str.replace(r"\s+", " ", regex=True).str.strip()
 
+    # --- Származtatott metrikák ---
     df["PointsPerSet"] = df["Points"] / df["Sets"].replace(0, pd.NA)
     df["AcesPerSet"] = df["Aces"] / df["Sets"].replace(0, pd.NA)
     df["BlocksPerSet"] = df["Blocks"] / df["Sets"].replace(0, pd.NA)
@@ -68,6 +82,7 @@ def load_data() -> pd.DataFrame:
 
 if __name__ == "__main__":
     frame = load_data()
+    print()
     print(frame.head().to_string(index=False))
     print()
     print("Shape:", frame.shape)
