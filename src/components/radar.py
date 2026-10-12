@@ -4,6 +4,8 @@ import panel as pn
 import plotly.graph_objects as go
 import pandas as pd
 
+from src.data_loader import filter_by_metric
+
 
 # A radar dimenziói: megjelenített név -> DataFrame oszlopnév
 RADAR_DIMS = {
@@ -11,7 +13,7 @@ RADAR_DIMS = {
     "Ász/szett": "AcesPerSet",
     "Sánc/szett": "BlocksPerSet",
     "Támadás %": "Attack%",
-    "Fogadás %": "PositiveReceive%",
+    "Tökéletes fogadás %": "PerfectReceive%",
     "Break pontok": "BreakPoints",
 }
 
@@ -31,22 +33,30 @@ def _normalize(series: pd.Series) -> pd.Series:
 def create_radar(df: pd.DataFrame) -> pn.Column:
     """Két játékos radar chartja, 6 dimenzióban.
 
-    Args:
-        df: A data_loader-ből származó DataFrame.
-
-    Returns:
-        Egy Panel Column, ami a radar chartot és a dropdownokat tartalmazza.
+    Csak azok a játékosok jelennek meg, akiknek:
+    - legalább 20 szettje van (Sets >= 20)
+    - legalább 50 ütése van (AttackTotal >= 50)
+    - legalább 50 fogadása van (ReceiveTotal >= 50)
     """
+    # Metrika-specifikus szűrés (szigorú: minden dimenzióban meg kell felelnie)
+    plot_df = filter_by_metric(df, "AcesPerSet")   # Sets >= 20
+    plot_df = filter_by_metric(plot_df, "Attack%")  # AttackTotal >= 50
+    plot_df = filter_by_metric(plot_df, "Receive%") # ReceiveTotal >= 50
+
+    if plot_df.empty:
+        return pn.Column(
+            pn.pane.Markdown("### 🕸️ Játékos-profil"),
+            pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
+        )
+
     # Normalizált értékek
-    norm_df = df.copy()
+    norm_df = plot_df.copy()
     for label, col in RADAR_DIMS.items():
         if col in norm_df.columns:
             norm_df[label] = _normalize(norm_df[col])
         else:
             norm_df[label] = 0.0
 
-    # Csak azok a játékosok, akiknek van legalább 1 szettje
-    norm_df = norm_df[norm_df["Sets"] > 0].copy()
     players = sorted(norm_df["Player"].dropna().unique().tolist())
 
     if len(players) < 2:
@@ -108,6 +118,10 @@ def create_radar(df: pd.DataFrame) -> pn.Column:
 
     return pn.Column(
         pn.pane.Markdown("### 🕸️ Játékos-profil"),
+        pn.pane.Markdown(
+            f"_Megjelenítve: {len(players)} játékos "
+            f"(min. 20 szett, 50 ütés, 50 fogadás)._"
+        ),
         pn.Row(player1, player2),
         pn.pane.Plotly(
             pn.bind(update, player1, player2),

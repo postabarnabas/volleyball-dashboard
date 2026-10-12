@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import streamlit as st
 
-from components.dream_team import build_dream_team
 from components.radar import render_radar
 from components.scatter import render_scatter
 from components.team_compare import summarize_by_team

@@ -4,51 +4,56 @@ import panel as pn
 import plotly.express as px
 import pandas as pd
 
+from src.data_loader import filter_by_metric
 
-# A metrikák: megjelenített név -> DataFrame oszlopnév
+
+# A metrikák: megjelenített név -> (DataFrame oszlopnév, szűrő kulcs)
 TEAM_METRICS = {
-    "Pont/szett": "PointsPerSet",
-    "Ász/szett": "AcesPerSet",
-    "Sánc/szett": "BlocksPerSet",
-    "Támadás %": "Attack%",
-    "Fogadás %": "PositiveReceive%",
+    "Pont/szett": ("PointsPerSet", "rate"),
+    "Ász/szett": ("AcesPerSet", "rate"),
+    "Sánc/szett": ("BlocksPerSet", "rate"),
+    "Támadás %": ("Attack%", "Attack%"),
+    "Tökéletes fogadás %": ("PerfectReceive%", "Receive%"),
 }
 
 
 def create_team_compare(df: pd.DataFrame) -> pn.Column:
     """Csapatok összehasonlítása csoportosított oszlopdiagramon.
 
-    Args:
-        df: A data_loader-ből származó DataFrame.
-
-    Returns:
-        Egy Panel Column, ami a csapat-összehasonlítást tartalmazza.
+    Minden metrikához a saját metrika-specifikus szűrőjét alkalmazzuk,
+    majd csapatonként átlagolunk.
     """
-    # Csak azok a játékosok, akiknek van legalább 1 szettje
-    plot_df = df[df["Sets"] > 0].copy()
-
-    if plot_df.empty:
+    if df.empty:
         return pn.Column(
             pn.pane.Markdown("### 🏆 Csapat-összehasonlítás"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
-    # Csapatonkénti átlagok
-    agg = (
-        plot_df.groupby("Team")[list(TEAM_METRICS.values())]
-        .mean()
-        .reset_index()
-    )
+    # Minden metrikához külön aggregálás
+    frames = []
+    for label, (col, filter_key) in TEAM_METRICS.items():
+        if filter_key == "rate":
+            sub = filter_by_metric(df, "AcesPerSet")  # Sets >= 20
+        else:
+            sub = filter_by_metric(df, filter_key)
 
-    # Átnevezzük a metrikákat a megjelenített nevekre
-    agg = agg.rename(columns={v: k for k, v in TEAM_METRICS.items()})
+        # Csak azok, akiknek van értéke az adott metrikában
+        sub = sub.dropna(subset=[col])
+        if sub.empty:
+            continue
 
-    # "Melt" – hosszú formátum a diagramhoz
-    agg_long = agg.melt(
-        id_vars="Team",
-        var_name="Metrika",
-        value_name="Érték",
-    )
+        agg = sub.groupby("Team")[col].mean().reset_index()
+        agg = agg.rename(columns={col: "Érték"})
+        agg["Metrika"] = label
+        frames.append(agg)
+
+    if not frames:
+        return pn.Column(
+            pn.pane.Markdown("### 🏆 Csapat-összehasonlítás"),
+            pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
+        )
+
+    agg_long = pd.concat(frames, ignore_index=True)
 
     # Csapatok ABC szerint
     team_order = sorted(agg_long["Team"].unique().tolist())
@@ -63,7 +68,7 @@ def create_team_compare(df: pd.DataFrame) -> pn.Column:
             "Team": team_order,
             "Metrika": list(TEAM_METRICS.keys()),
         },
-        title="Csapatok összehasonlítása (átlagok)",
+        title="Csapatok összehasonlítása (metrika-specifikus átlagok)",
         labels={
             "Team": "Csapat",
             "Érték": "Átlagos érték",
@@ -72,13 +77,16 @@ def create_team_compare(df: pd.DataFrame) -> pn.Column:
     )
 
     fig.update_layout(
-        height=500,
+        height=550,
         xaxis_tickangle=-30,
         legend_title_text="Metrika",
-        margin=dict(l=40, r=20, t=60, b=120),
+        margin=dict(l=40, r=20, t=60, b=140),
     )
 
     return pn.Column(
         pn.pane.Markdown("### 🏆 Csapat-összehasonlítás"),
+        pn.pane.Markdown(
+            "_Minden metrika a saját metrika-specifikus szűrőjét használja._"
+        ),
         pn.pane.Plotly(fig, config={"responsive": True}),
     )
