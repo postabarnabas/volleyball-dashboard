@@ -1,64 +1,56 @@
 from __future__ import annotations
 
-import streamlit as st
+import sys
+from pathlib import Path
 
-from components.radar import render_radar
-from components.scatter import render_scatter
-from components.team_compare import summarize_by_team
-from data_loader import load_data
+# --- A projekt gyökere a sys.path-hoz ---
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import panel as pn
 
-@st.cache_data
-def get_data():
-    return load_data()
+from src.data_loader import load_data
+from src.components.radar import create_radar
+from src.components.scatter import create_scatter
+from src.components.team_compare import create_team_compare
 
+# Panel extension
+pn.extension("plotly", sizing_mode="stretch_width")
 
-def main() -> None:
-    st.set_page_config(page_title="Volleyball Dashboard", layout="wide")
-    df = get_data()
+# --- Adat betöltés ---
+df = load_data()
 
-    teams = sorted(df["Team"].dropna().unique())
-    selected_teams = st.sidebar.multiselect("Teams", teams, default=teams[:5])
+# --- Fejléc ---
+header = pn.pane.Markdown(
+    """
+    # 🏐 Férfi NBI Extraliga 2025/26 – Interaktív Dashboard
+    **Adatforrás:** HVF statisztika | **Készítette:** [Neved]
+    """,
+    sizing_mode="stretch_width",
+)
 
-    if selected_teams:
-        filtered = df[df["Team"].isin(selected_teams)].copy()
-    else:
-        filtered = df.copy()
+# --- Komponensek ---
+scatter = create_scatter(df)
+radar = create_radar(df)
+team_compare = create_team_compare(df)
 
-    st.title("Volleyball Dashboard")
+# --- Lábléc ---
+footer = pn.pane.Markdown(
+    """
+    ---
+    **Technológiák:** Python, Panel, Plotly, pandas |
+    **Adat:** HVF Férfi NBI Extraliga 2025/26
+    """,
+    sizing_mode="stretch_width",
+)
 
-    metrics = [
-        ("Players", len(filtered)),
-        ("Teams", filtered["Team"].nunique()),
-        ("Total points", int(filtered["Pontok"].fillna(0).sum())),
-        ("Average points/set", round(float(filtered["Pont/szett"].mean()), 2) if filtered["Pont/szett"].notna().any() else 0),
-    ]
+# --- Elrendezés ---
+dashboard = pn.Column(
+    header,
+    pn.Row(scatter, radar),
+    team_compare,
+    footer,
+    sizing_mode="stretch_width",
+)
 
-    columns = st.columns(len(metrics))
-    for col, (label, value) in zip(columns, metrics):
-        col.metric(label, value)
-
-    st.subheader("Player performance")
-    scatter = render_scatter(filtered)
-    st.plotly_chart(scatter, use_container_width=True)
-
-    left_col, right_col = st.columns(2)
-    with left_col:
-        selected_player = st.selectbox("Player", filtered["Player"].sort_values().tolist())
-        radar = render_radar(filtered, selected_player)
-        st.plotly_chart(radar, use_container_width=True)
-
-    with right_col:
-        st.subheader("Dream team")
-        st.dataframe(build_dream_team(filtered), use_container_width=True)
-
-    st.subheader("Team comparison")
-    team_summary = summarize_by_team(filtered)
-    st.dataframe(team_summary, use_container_width=True)
-
-    team_chart_data = team_summary.set_index("Team")[["avg_points", "avg_blocks"]]
-    st.bar_chart(team_chart_data)
-
-
-if __name__ == "__main__":
-    main()
+# --- Servable ---
+dashboard.servable()
