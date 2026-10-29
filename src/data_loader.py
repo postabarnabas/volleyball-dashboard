@@ -110,9 +110,10 @@ def load_data() -> pd.DataFrame:
     df["Player"] = df["Player"].str.replace(r"\s+", " ", regex=True).str.strip()
 
     # --- Származtatott metrikák ---
-    df["PointsPerSet"] = df["Points"] / df["Sets"].replace(0, pd.NA)
-    df["AcesPerSet"] = df["Aces"] / df["Sets"].replace(0, pd.NA)
-    df["BlocksPerSet"] = df["Blocks"] / df["Sets"].replace(0, pd.NA)
+    df["PointsPerGame"] = df["Points"] / df["Games"].replace(0, pd.NA)
+    df["AcesPerGame"] = df["Aces"] / df["Games"].replace(0, pd.NA)
+    df["BlocksPerGame"] = df["Blocks"] / df["Games"].replace(0, pd.NA)
+    df["ServeErrorsPerGame"] = df["ServeErrors"] / df["Games"].replace(0, pd.NA)
 
     return df
 
@@ -131,7 +132,7 @@ def filter_by_metric(df: pd.DataFrame, metric: str) -> pd.DataFrame:
         return df[df["ReceiveTotal"] >= MIN_RECEIVE]
     elif metric == "Attack%":
         return df[df["AttackTotal"] >= MIN_ATTACK]
-    elif metric in ["AcesPerSet", "BlocksPerSet", "PointsPerSet", "BreakPoints"]:
+    elif metric in ["AcesPerGame", "BlocksPerGame", "PointsPerGame", "BreakPoints", "ServeErrorsPerGame"]:
         return df[df["Sets"] >= MIN_SETS_FOR_RATE]
     else:
         return df
