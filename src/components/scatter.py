@@ -4,26 +4,16 @@ import panel as pn
 import plotly.express as px
 import pandas as pd
 
-from src.data_loader import filter_by_metric
-
 
 def create_scatter(df: pd.DataFrame) -> pn.Column:
-    """Támadás% vs. tökéletes fogadás% scatter.
-
-    Csak azok a játékosok jelennek meg, akiknek:
-    - legalább 50 ütése van (AttackTotal >= 50)
-    - legalább 50 fogadása van (ReceiveTotal >= 50)
-    """
-    # Metrika-specifikus szűrés
-    plot_df = filter_by_metric(df, "Receive%")
-    plot_df = filter_by_metric(plot_df, "Attack%")
-
+    """Támadás% vs. tökéletes fogadás% scatter."""
+    
     # Csak azok, akiknek van mindkét értéke
-    plot_df = plot_df.dropna(subset=["Attack%", "PerfectReceive%"]).copy()
+    plot_df = df.dropna(subset=["Attack%", "PerfectReceive%"]).copy()
 
     if plot_df.empty:
         return pn.Column(
-            pn.pane.Markdown("### 🎯 Támadás vs. Fogadás"),
+            pn.pane.Markdown("###  Támadás vs. Fogadás"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
@@ -39,8 +29,6 @@ def create_scatter(df: pd.DataFrame) -> pn.Column:
             "Sets": True,
             "Attack%": ":.1f",
             "PerfectReceive%": ":.1f",
-            "AttackTotal": True,
-            "ReceiveTotal": True,
             "Team": False,
         },
         title="Támadáshatékonyság vs. Tökéletes nyitásfogadás",
@@ -49,8 +37,6 @@ def create_scatter(df: pd.DataFrame) -> pn.Column:
             "PerfectReceive%": "Tökéletes fogadás %",
             "Points": "Pontok",
             "Team": "Csapat",
-            "AttackTotal": "Összes ütés",
-            "ReceiveTotal": "Összes fogadás",
         },
     )
 
@@ -61,10 +47,9 @@ def create_scatter(df: pd.DataFrame) -> pn.Column:
     )
 
     return pn.Column(
-        pn.pane.Markdown("### 🎯 Támadás vs. Fogadás"),
+        pn.pane.Markdown("###  Támadás vs. Fogadás"),
         pn.pane.Markdown(
-            f"_Megjelenítve: {len(plot_df)} játékos "
-            f"(min. 50 ütés és 50 fogadás)._"
+            f"_Megjelenítve: {len(plot_df)} játékos (nyers adat, szűrés nélkül)._"
         ),
         pn.pane.Plotly(fig, config={"responsive": True}),
     )

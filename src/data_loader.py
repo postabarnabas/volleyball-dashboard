@@ -9,14 +9,12 @@ DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "hvf_stats.xls"
 MIN_GAMES = 5
 MIN_SETS = 8
 
-# --- Metrika-specifikus szűrők ---
-MIN_RECEIVE = 50
-MIN_ATTACK = 50
-MIN_SETS_FOR_RATE = 20
-
 
 def load_data() -> pd.DataFrame:
-    """Load and clean the HVF statistics sheet."""
+    """Load and clean the HVF statistics sheet.
+    Csak a nyers adatokat tölti be, kiszűri a globális minimumot,
+    és létrehozza a teljes nevet.
+    """
     df = pd.read_excel(DATA_PATH, sheet_name=0, header=1)
 
     if df.empty:
@@ -33,6 +31,7 @@ def load_data() -> pd.DataFrame:
         6: "BreakPoints",
         7: "Wins-Losses",
         8: "ServeErrors",      # S =
+        9: "S !", 10: "S /", 11: "S -", 12: "S +",
         13: "Aces",            # S #
         14: "R=",              # R =
         15: "R!",              # R !
@@ -61,40 +60,28 @@ def load_data() -> pd.DataFrame:
     # --- Számos oszlopok konvertálása ---
     numeric_cols = [
         "Games", "Sets", "Points", "BreakPoints", "Wins-Losses",
-        "ServeErrors", "Aces",
+        "ServeErrors", "S !", "S /", "S -", "S +", "Aces", # ÚJ SOR "Aces",
         "R=", "R!", "R/", "R-", "R+", "R#",
         "A=", "A!", "A/", "A-", "A+", "A#",
         "Blocks",
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+        
+    # ÚJ SOR: Összes nyitás kiszámítása
+    df["ServeTotal"] = (
+        df["ServeErrors"].fillna(0) + df["S !"].fillna(0) + df["S /"].fillna(0) +
+        df["S -"].fillna(0) + df["S +"].fillna(0) + df["Aces"].fillna(0)
+    )
 
-    # --- Százalékos oszlopok ---
+    # --- Százalékos oszlopok (csak a % jel levágása) ---
     for col in ["PerfectReceive%", "Attack%"]:
         series = df[col].astype(str).str.replace("%", "", regex=False)
         series = series.str.replace(",", ".", regex=False)
         series = series.replace({".": pd.NA, "nan": pd.NA, "": pd.NA})
         df[col] = pd.to_numeric(series, errors="coerce")
 
-    # --- Mintaszámok kiszámítása (a szűrés ELŐTT!) ---
-    df["ReceiveTotal"] = (
-        df["R="].fillna(0)
-        + df["R!"].fillna(0)
-        + df["R/"].fillna(0)
-        + df["R-"].fillna(0)
-        + df["R+"].fillna(0)
-        + df["R#"].fillna(0)
-    )
-    df["AttackTotal"] = (
-        df["A="].fillna(0)
-        + df["A!"].fillna(0)
-        + df["A/"].fillna(0)
-        + df["A-"].fillna(0)
-        + df["A+"].fillna(0)
-        + df["A#"].fillna(0)
-    )
-
-    # --- Globális szűrés ---
+    # --- Globális szűrés (csak meccs és szett alapján!) ---
     before = len(df)
     df = df[(df["Games"] > MIN_GAMES) & (df["Sets"] >= MIN_SETS)].copy()
     after = len(df)
@@ -109,33 +96,12 @@ def load_data() -> pd.DataFrame:
     )
     df["Player"] = df["Player"].str.replace(r"\s+", " ", regex=True).str.strip()
 
-    # --- Származtatott metrikák ---
-    df["PointsPerGame"] = df["Points"] / df["Games"].replace(0, pd.NA)
-    df["AcesPerGame"] = df["Aces"] / df["Games"].replace(0, pd.NA)
-    df["BlocksPerGame"] = df["Blocks"] / df["Games"].replace(0, pd.NA)
-    df["ServeErrorsPerGame"] = df["ServeErrors"] / df["Games"].replace(0, pd.NA)
-
     return df
 
 
+# A filter_by_metric egyelőre üres, mert most csak a nyers adatot nézzük
 def filter_by_metric(df: pd.DataFrame, metric: str) -> pd.DataFrame:
-    """Visszaadja a szűrt DataFrame-et az adott metrikához.
-
-    Args:
-        df: A load_data() által visszaadott DataFrame.
-        metric: A metrika neve (pl. "Receive%", "Attack%").
-
-    Returns:
-        Szűrt DataFrame.
-    """
-    if metric == "Receive%":
-        return df[df["ReceiveTotal"] >= MIN_RECEIVE]
-    elif metric == "Attack%":
-        return df[df["AttackTotal"] >= MIN_ATTACK]
-    elif metric in ["AcesPerGame", "BlocksPerGame", "PointsPerGame", "BreakPoints", "ServeErrorsPerGame"]:
-        return df[df["Sets"] >= MIN_SETS_FOR_RATE]
-    else:
-        return df
+    return df
 
 
 if __name__ == "__main__":
@@ -146,6 +112,3 @@ if __name__ == "__main__":
     print("Shape:", frame.shape)
     print()
     print("Columns:", frame.columns.tolist())
-    print()
-    print("ReceiveTotal minta:", frame["ReceiveTotal"].head().tolist())
-    print("AttackTotal minta:", frame["AttackTotal"].head().tolist())
