@@ -47,7 +47,9 @@ def load_data() -> pd.DataFrame:
         26: "A+",              # A +
         27: "A#",              # A #
         28: "Attack%",         # Tám%
+        29: "B=",              # B =
         34: "Blocks",          # B #
+
     }
 
     df = df.iloc[:, list(keep_columns.keys())].copy()
@@ -63,7 +65,7 @@ def load_data() -> pd.DataFrame:
         "ServeErrors", "S !", "S /", "S -", "S +", "Aces", # ÚJ SOR "Aces",
         "R=", "R!", "R/", "R-", "R+", "R#",
         "A=", "A!", "A/", "A-", "A+", "A#",
-        "Blocks",
+        "Blocks", "B="
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -95,6 +97,33 @@ def load_data() -> pd.DataFrame:
         + df["Name"].astype(str).str.strip()
     )
     df["Player"] = df["Player"].str.replace(r"\s+", " ", regex=True).str.strip()
+    df["AttackErrorPG"] = df["A="] / df["Games"].replace(0, pd.NA)
+    df["ServeErrorPG"] = df["ServeErrors"] / df["Games"].replace(0, pd.NA)
+    df["ReceiveErrorPG"] = df["R="] / df["Games"].replace(0, pd.NA)
+    df["BlockErrorPG"] = df["B="] / df["Games"].replace(0, pd.NA)
+
+
+        # --- Térkép adatok (Városok és koordináták) ---
+    team_locations = {
+        "FINO KAPOSVÁR": ("Kaposvár", 46.3594, 17.7968),
+        "Vegyész RC Kazincbarcika": ("Kazincbarcika", 48.2500, 20.6333),
+        "Máv Előre Foxconn": ("Székesfehérvár", 47.1910, 18.4108),
+        "TFSE": ("Budapest", 47.4888, 19.0268),
+        "MAFC": ("Budapest", 47.6181, 19.1903),
+        "PRESTIGE FITNESS PSE": ("Budapest", 47.4693, 19.1293),
+        "DEAC": ("Debrecen", 47.5316, 21.6273),
+        "MEAFC-Peka Bau": ("Miskolc", 48.1035, 20.7784),
+        "SWISSTEN DÁG KSE": ("Dág", 47.6667, 18.7333),
+        "VIDUX-SZEGEDI RSE": ("Szeged", 46.2530, 20.1414),
+        "Kecskeméti RC": ("Kecskemét", 46.9062, 19.6913),
+        "Szolnoki RK-SC SI": ("Szolnok", 47.1747, 20.1764),
+        "DKSE": ("Dunaújváros", 46.9619, 18.9355),
+    }
+
+    # Új oszlopok létrehozása
+    df["City"] = df["Team"].map(lambda t: team_locations.get(t, ("Ismeretlen", 0, 0))[0])
+    df["Lat"] = df["Team"].map(lambda t: team_locations.get(t, ("Ismeretlen", 0, 0))[1])
+    df["Lon"] = df["Team"].map(lambda t: team_locations.get(t, ("Ismeretlen", 0, 0))[2])
 
     return df
 
