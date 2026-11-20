@@ -1,140 +1,155 @@
 from __future__ import annotations
 
+import pandas as pd
 import panel as pn
 import plotly.express as px
-import plotly.graph_objects as go
-import pandas as pd
 
-from src.data_loader import filter_by_metric
+from src.theme import OTHER_COLOR, OTHER_LABEL, team_color_map
 
+ALL_TEAMS = "Összes csapat"
 
-# Csoportosított metrikák
-PERCENT_METRICS = {
-    "Támadás %": ("Attack%", "Attack%"),
-    "Tökéletes fogadás %": ("PerfectReceive%", "Receive%"),
+ATTACK_COLS = ["A=", "A!", "A/", "A-", "A+", "A#"]
+RECEIVE_COLS = ["R=", "R!", "R/", "R-", "R+", "R#"]
+
+# num / den: a team_table oszlopai; scale: 100 a százalékhoz
+METRICS = {
+    "Támadás % (kill-arány)": dict(
+        num="kills", den="attacks", scale=100, unit="%", higher_better=True,
+        num_label="kill", den_label="támadás",
+        desc="Csapat összes kill (A#) / csapat összes támadása.",
+    ),
+    "Tökéletes fogadás %": dict(
+        num="perfect_rec", den="receptions", scale=100, unit="%", higher_better=True,
+        num_label="tökéletes fogadás", den_label="fogadás",
+        desc="Csapat összes tökéletes fogadása (R#) / csapat összes fogadása.",
+    ),
+    "Ász / szett": dict(
+        num="aces", den="sets", scale=1, unit="", higher_better=True,
+        num_label="ász", den_label="szett",
+        desc="Csapat összes ásza / csapat szettjeinek száma.",
+    ),
+    "Sánc (pontblokk) / szett": dict(
+        num="blocks", den="sets", scale=1, unit="", higher_better=True,
+        num_label="pontblokk", den_label="szett",
+        desc="Csapat összes pontblokkja / csapat szettjeinek száma.",
+    ),
+    "Rontott nyitás / szett": dict(
+        num="serve_errors", den="sets", scale=1, unit="", higher_better=False,
+        num_label="rontott nyitás", den_label="szett",
+        desc="Csapat összes rontott nyitása / csapat szettjeinek száma.",
+    ),
 }
 
-RATE_METRICS = {    
-    "Ász/meccs": ("Aces", "rate"),
-    "Sánc/meccs": ("Blocks", "rate"),
-    "Rontott nyitás/meccs": ("ServeErrors", "rate"),
-}
 
-
-def _create_grouped_chart(
-    df: pd.DataFrame,
-    metrics: dict[str, tuple[str, str]],
-    title: str,
-    y_axis_title: str,
-    fmt: str,
-) -> go.Figure:
-    """Csoportosított oszlopdiagram, azonos skálájú metrikákkal."""
-    frames = []
-    for label, (col, filter_key) in metrics.items():
-        if filter_key == "rate":
-            # A csapat szintű mutatóknál NINCS egyéni szűrés!
-            sub = df.copy()
-        else:
-            sub = filter_by_metric(df, filter_key)
-
-        sub = sub.dropna(subset=[col])
-        if sub.empty:
-            continue
-
-        if filter_key == "rate":
-            # ÖSSZEADÁS: csapat összes pontja / csapat összes meccse
-            # A "Games" itt a játékosok meccseit jelenti, de a csapat meccseit
-            # a legtöbbet játszó játékos adja. Ezt használjuk nevezőnek.
-            team_games = sub.groupby("Team")["Games"].max()
-            agg = sub.groupby("Team")[col].sum().reset_index()
-            agg = agg.merge(team_games, on="Team")
-            agg["Érték"] = agg[col] / agg["Games"]
-        else:
-            # ÁTLAG: százalékos metrikáknál marad az átlag
-            agg = sub.groupby("Team")[col].mean().reset_index()
-            agg = agg.rename(columns={col: "Érték"})
-
-        agg["Metrika"] = label
-        frames.append(agg[["Team", "Érték", "Metrika"]])
-
-    if not frames:
-        fig = go.Figure()
-        fig.add_annotation(
-            text="Nincs elég adat",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False,
-        )
-        fig.update_layout(height=450, title=title)
-        return fig
-
-    agg_long = pd.concat(frames, ignore_index=True)
-
-    # Csapatok sorrendje: a fő metrika (első) szerint csökkenő
-    first_metric = list(metrics.keys())[0]
-    team_order = (
-        agg_long[agg_long["Metrika"] == first_metric]
-        .sort_values("Érték", ascending=False)["Team"]
-        .tolist()
-    )
-
-    fig = px.bar(
-        agg_long,
-        x="Team",
-        y="Érték",
-        color="Metrika",
-        barmode="group",
-        category_orders={
-            "Team": team_order,
-            "Metrika": list(metrics.keys()),
-        },
-        title=title,
-        labels={"Team": "Csapat", "Érték": y_axis_title, "Metrika": "Metrika"},
-    )
-
-    fig.update_layout(
-        height=450,
-        xaxis_tickangle=-45,
-        margin=dict(l=50, r=20, t=60, b=100),
-        legend_title_text="",
-        yaxis=dict(rangemode="tozero", title=y_axis_title),
-    )
-
-    return fig
+def _team_table(df: pd.DataFrame) -> pd.DataFrame:
+    """Csapatszintű összegek (súlyozott mutatókhoz: összeg / összeg)."""
+    g = df.groupby("Team")
+    return pd.DataFrame({
+        # a csapat szettszáma ~ a legtöbbet játszó játékos szettjei
+        "sets": g["Sets"].max(),
+        "kills": g["A#"].sum(),
+        "attacks": g[ATTACK_COLS].sum().sum(axis=1),
+        "perfect_rec": g["R#"].sum(),
+        "receptions": g[RECEIVE_COLS].sum().sum(axis=1),
+        "aces": g["Aces"].sum(),
+        "serve_errors": g["ServeErrors"].sum(),
+        "blocks": g["Blocks"].sum(),
+    })
 
 
 def create_team_compare(df: pd.DataFrame) -> pn.Column:
     if df.empty:
         return pn.Column(
-            pn.pane.Markdown("### 🏆 Csapat-összehasonlítás"),
+            pn.pane.Markdown("### Csapat-összehasonlítás"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
-    fig_percent = _create_grouped_chart(
-        df,
-        PERCENT_METRICS,
-        title="Százalékos metrikák",
-        y_axis_title="Érték (%)",
-        fmt=".1f",
+    team_table = _team_table(df)
+    team_colors = team_color_map(df["Team"].dropna().unique())
+
+    metric_select = pn.widgets.Select(
+        name="Mutató", options=list(METRICS), value=list(METRICS)[0], width=280
+    )
+    team_select = pn.widgets.Select(
+        name="Csapat kiemelése",
+        options=[ALL_TEAMS] + sorted(team_colors),
+        value=ALL_TEAMS,
+        width=250,
     )
 
-    fig_rate = _create_grouped_chart(
-        df,
-        RATE_METRICS,
-        title="Mutatók (meccsenként)",
-        y_axis_title="Érték (meccsenként)",
-        fmt=".2f",
-    )
+    def _view(metric: str, team: str):
+        m = METRICS[metric]
+        t = team_table.copy()
+        t["Érték"] = t[m["num"]] / t[m["den"]] * m["scale"]
+        t["Num"] = t[m["num"]]
+        t["Den"] = t[m["den"]]
+
+        # Bajnokság összesített átlaga (súlyozott: összeg / összeg)
+        league = t[m["num"]].sum() / t[m["den"]].sum() * m["scale"]
+
+        t = t.reset_index().sort_values("Érték", ascending=not m["higher_better"])
+        order = t["Team"].tolist()
+
+        t["Szín"] = t["Team"]
+        if team != ALL_TEAMS:
+            t["Szín"] = t["Team"].where(t["Team"] == team, OTHER_LABEL)
+
+        unit = m["unit"]
+        title = metric + ("" if m["higher_better"] else " (kevesebb = jobb)")
+
+        fig = px.bar(
+            t,
+            x="Érték",
+            y="Team",
+            orientation="h",
+            color="Szín",
+            color_discrete_map={**team_colors, OTHER_LABEL: OTHER_COLOR},
+            category_orders={"Team": order},
+            custom_data=["Num", "Den"],
+            title=title,
+            template="plotly_white",
+        )
+        fig.update_traces(
+            texttemplate="%{x:.1f}" + unit,
+            textposition="outside",
+            hovertemplate=(
+                "<b>%{y}</b><br>"
+                + metric + ": %{x:.2f}" + unit + "<br>"
+                + m["num_label"] + ": %{customdata[0]:.0f}<br>"
+                + m["den_label"] + ": %{customdata[1]:.0f}"
+                "<extra></extra>"
+            ),
+        )
+        fig.add_vline(
+            x=league, line_dash="dot", line_color="gray",
+            annotation_text=f"bajnokság átlaga: {league:.1f}{unit}",
+            annotation_position="top",
+        )
+        fig.update_xaxes(
+            range=[0, t["Érték"].max() * 1.15], ticksuffix=unit, title=None
+        )
+        fig.update_yaxes(autorange="reversed", title=None)  # a legjobb felül
+        fig.update_layout(
+            height=520,
+            showlegend=False,
+            margin=dict(l=20, r=20, t=60, b=40),
+        )
+
+        caption = pn.pane.Markdown(
+            f"_{m['desc']} A csapatok a legjobbtól a leggyengébbig vannak rendezve"
+            f"{'' if m['higher_better'] else ' (itt a kevesebb a jobb)'}. "
+            "A százalékok súlyozottak (összes találat / összes kísérlet), nem a "
+            "játékosok százalékainak átlaga. A szaggatott vonal a bajnokság "
+            "összesített átlaga. A szettszám a csapat legtöbbet játszó "
+            "játékosának szettjeiből becsült._"
+        )
+        return pn.Column(
+            caption,
+            pn.pane.Plotly(fig, config={"responsive": True}),
+        )
 
     return pn.Column(
-        pn.pane.Markdown("### 🏆 Csapat-összehasonlítás"),
-        pn.pane.Markdown(
-            "_Bal: százalékos metrikák (0-100). "
-            "Jobb: meccsenkénti mutatók (0-10). "
-            "Az azonos skálájú metrikák egy diagramon vannak, "
-            "így elkerüljük a megtévesztő eltérő skálákat._"
-        ),
-        pn.Row(
-            pn.pane.Plotly(fig_percent, config={"responsive": True}),
-            pn.pane.Plotly(fig_rate, config={"responsive": True}),
-        ),
+        pn.pane.Markdown("### Csapat-összehasonlítás"),
+        pn.Row(metric_select, team_select),
+        pn.bind(_view, metric_select, team_select),
     )
