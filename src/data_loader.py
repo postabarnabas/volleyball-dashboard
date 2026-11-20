@@ -83,6 +83,14 @@ def load_data() -> pd.DataFrame:
         series = series.replace({".": pd.NA, "nan": pd.NA, "": pd.NA})
         df[col] = pd.to_numeric(series, errors="coerce")
 
+
+        # --- Csapatszintű adatok a globális szűrés ELŐTT ---
+    team_info = df.groupby("Team").agg(
+        PlayersUsed=("Games", lambda s: int((s > 0).sum())),
+        TeamGames=("Games", "max"),
+        TeamSets=("Sets", "max"),
+    )
+    df = df.join(team_info, on="Team")
     # --- Globális szűrés (csak meccs és szett alapján!) ---
     before = len(df)
     df = df[(df["Games"] > MIN_GAMES) & (df["Sets"] >= MIN_SETS)].copy()
