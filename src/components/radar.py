@@ -4,25 +4,17 @@ import panel as pn
 import plotly.graph_objects as go
 import pandas as pd
 
-from src.data_loader import filter_by_metric
-
-
-# A radar dimenziói: megjelenített név -> DataFrame oszlopnév
+# 4 hiba-alapú dimenzió (mind meccsenként)
 RADAR_DIMS = {
-    "Pont/szett": "PointsPerSet",
-    "Ász/szett": "AcesPerSet",
-    "Sánc/szett": "BlocksPerSet",
-    "Támadás %": "Attack%",
-    "Tökéletes fogadás %": "PerfectReceive%",
-    "Break pontok": "BreakPoints",
+    "Támadási hiba/meccs": "AttackErrorPG",
+    "Rontott nyitás/meccs": "ServeErrorPG",
+    "Kapott ász/meccs": "ReceiveErrorPG",
+    "Sánchiba/meccs": "BlockErrorPG",
 }
 
 
 def _normalize(series: pd.Series) -> pd.Series:
-    """0-1 közé normalizál egy pandas Series-t.
-
-    Ha minden érték ugyanaz, akkor 0-t ad vissza (nincs értelme skálázni).
-    """
+    """0-1 közé normalizál."""
     series = pd.to_numeric(series, errors="coerce")
     mn, mx = series.min(), series.max()
     if pd.isna(mn) or pd.isna(mx) or mx == mn:
@@ -30,101 +22,84 @@ def _normalize(series: pd.Series) -> pd.Series:
     return (series - mn) / (mx - mn)
 
 
-def create_radar(df: pd.DataFrame) -> pn.Column:
-    """Két játékos radar chartja, 6 dimenzióban.
+def _create_radar_figure(
+    df: pd.DataFrame,
+    title: str,
+    p1: str,
+    p2: str,
+) -> go.Figure:
+    """Egy radar diagram létrehozása a 4 dimenzióval."""
+    fig = go.Figure()
 
-    Csak azok a játékosok jelennek meg, akiknek:
-    - legalább 20 szettje van (Sets >= 20)
-    - legalább 50 ütése van (AttackTotal >= 50)
-    - legalább 50 fogadása van (ReceiveTotal >= 50)
-    """
-    # Metrika-specifikus szűrés (szigorú: minden dimenzióban meg kell felelnie)
-    plot_df = filter_by_metric(df, "AcesPerSet")   # Sets >= 20
-    plot_df = filter_by_metric(plot_df, "Attack%")  # AttackTotal >= 50
-    plot_df = filter_by_metric(plot_df, "Receive%") # ReceiveTotal >= 50
+    for player in [p1, p2]:
+        row = df[df["Player"] == player]
+        if row.empty:
+            continue
+        row = row.iloc[0]
+        values = [row[label] for label in RADAR_DIMS]
+        values_closed = values + [values[0]]
+        labels_closed = list(RADAR_DIMS.keys()) + [list(RADAR_DIMS.keys())[0]]
+
+        fig.add_trace(
+            go.Scatterpolar(
+                r=values_closed,
+                theta=labels_closed,
+                fill="toself",
+                name=player,
+            )
+        )
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 1],
+            )
+        ),
+        showlegend=True,
+        height=500,
+        margin=dict(l=60, r=60, t=60, b=40),
+        title=title,
+    )
+    return fig
+
+
+def create_radar(df: pd.DataFrame) -> pn.Column:
+    """Két játékos összehasonlítása egy 4 dimenziós (hiba) radaron."""
+    
+    # Itt már nem kell szűrnünk, mert a globális szűrés a data loaderben megtörtént.
+    # Csak azokat vesszük, akiknek van minden hiba adata.
+    plot_df = df.dropna(subset=list(RADAR_DIMS.values())).copy()
 
     if plot_df.empty:
         return pn.Column(
-            pn.pane.Markdown("### 🕸️ Játékos-profil"),
+            pn.pane.Markdown("### 🕸️ Hiba-profil"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
-    # Normalizált értékek
+    # Normalizálás
     norm_df = plot_df.copy()
     for label, col in RADAR_DIMS.items():
-        if col in norm_df.columns:
-            norm_df[label] = _normalize(norm_df[col])
-        else:
-            norm_df[label] = 0.0
+        norm_df[label] = _normalize(norm_df[col])
 
     players = sorted(norm_df["Player"].dropna().unique().tolist())
+    
+    player1 = pn.widgets.Select(name="Játékos 1", options=players, value=players[0], width=250)
+    player2 = pn.widgets.Select(name="Játékos 2", options=players, value=players[1], width=250)
 
-    if len(players) < 2:
-        return pn.Column(
-            pn.pane.Markdown("### 🕸️ Játékos-profil"),
-            pn.pane.Markdown("_Nincs elég játékos az összehasonlításhoz._"),
+    @pn.depends(player1, player2, watch=True)
+    def update_radar(p1: str, p2: str):
+        return pn.pane.Plotly(
+            _create_radar_figure(norm_df, "Játékos hiba-profil (normalizált)", p1, p2), 
+            config={"responsive": True}
         )
-
-    # Alapértelmezett: az első két játékos
-    player1 = pn.widgets.Select(
-        name="Játékos 1",
-        options=players,
-        value=players[0],
-        width=250,
-    )
-    player2 = pn.widgets.Select(
-        name="Játékos 2",
-        options=players,
-        value=players[1],
-        width=250,
-    )
-
-    @pn.depends(player1, player2)
-    def update(p1: str, p2: str):
-        fig = go.Figure()
-
-        for player in [p1, p2]:
-            row = norm_df[norm_df["Player"] == player]
-            if row.empty:
-                continue
-            row = row.iloc[0]
-            values = [row[label] for label in RADAR_DIMS]
-            # Bezárjuk a kört (első érték megismétlése)
-            values_closed = values + [values[0]]
-            labels_closed = list(RADAR_DIMS.keys()) + [list(RADAR_DIMS.keys())[0]]
-
-            fig.add_trace(
-                go.Scatterpolar(
-                    r=values_closed,
-                    theta=labels_closed,
-                    fill="toself",
-                    name=player,
-                )
-            )
-
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 1],
-                )
-            ),
-            showlegend=True,
-            height=500,
-            margin=dict(l=60, r=60, t=60, b=40),
-            title="Játékos-profil (normalizált)",
-        )
-        return fig
 
     return pn.Column(
-        pn.pane.Markdown("### 🕸️ Játékos-profil"),
+        pn.pane.Markdown("### 🕸️ Játékos hiba-profil"),
         pn.pane.Markdown(
-            f"_Megjelenítve: {len(players)} játékos "
-            f"(min. 20 szett, 50 ütés, 50 fogadás)._"
+            "_A radar 4 dimenziója: Támadási hiba, Rontott nyitás, Kapott ász, Sánchiba (mind meccsenként). "
+            "A kisebb érték a jobb, de a normalizálás miatt a nagyobb területű játékos többet hibázik._"
         ),
         pn.Row(player1, player2),
-        pn.pane.Plotly(
-            pn.bind(update, player1, player2),
-            config={"responsive": True},
-        ),
+        update_radar,
     )
