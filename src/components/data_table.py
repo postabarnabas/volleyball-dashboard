@@ -1,82 +1,111 @@
 from __future__ import annotations
 
-import panel as pn
 import pandas as pd
+import panel as pn
+
+ALL_TEAMS = "Összes csapat"
+
+# adatoszlop -> megjelenített név
+COLUMNS = {
+    "Player": "Játékos",
+    "Team": "Csapat",
+    "Games": "Meccsek",
+    "Sets": "Szettek",
+    "Points": "Pontok",
+    "Aces": "Ászok",
+    "Blocks": "Pontblokk",
+    "Attack%": "Támadás %",
+    "PerfectReceive%": "Tökéletes fogadás %",
+}
+
+# Sávos megjelenítés: a számok mögött az oszlop maximumához viszonyított arány
+BAR_COLUMNS = ["Pontok", "Ászok", "Pontblokk"]
+BAR_COLOR = "#BCD7F0"
+
+
+def _filter(table: pd.DataFrame, team: str, query: str) -> pd.DataFrame:
+    """Csapat és névkereső szűrés."""
+    out = table
+    if team != ALL_TEAMS:
+        out = out[out["Csapat"] == team]
+    if query and query.strip():
+        out = out[
+            out["Játékos"].str.contains(query.strip(), case=False, na=False, regex=False)
+        ]
+    return out
 
 
 def create_data_table(df: pd.DataFrame) -> pn.Column:
-    """Interaktív, szűrhető és rendezhető adattábla a játékosokról."""
-    
-    # Kiválasztjuk, hogy mely oszlopok legyenek benne a táblázatban
-    # (A túl hosszú listát elkerüljük, csak a lényegesebbeket)
-    columns_to_show = [
-        "Player", "Team", "Games", "Sets", "Points",
-        "PointsPerGame", "AcesPerGame", "BlocksPerGame", 
-        "Attack%", "PerfectReceive%"
-    ]
-    
-    # Ha valamelyik oszlop hiányzik (pl. mert még nem futott a data_loader),
-    # akkor csak azokat tartjuk meg, amik léteznek.
-    existing_columns = [col for col in columns_to_show if col in df.columns]
-    
-    table_df = df[existing_columns].copy()
-    
-    # Oszlopnevek átnevezése a szép megjelenéshez
-    rename_dict = {
-        "Player": "Játékos",
-        "Team": "Csapat",
-        "Games": "Meccsek",
-        "Sets": "Szettek",
-        "Points": "Össz. Pont",
-        "PointsPerGame": "Pont/meccs",
-        "AcesPerGame": "Ász/meccs",
-        "BlocksPerGame": "Sánc/meccs",
-        "Attack%": "Támadás %",
-        "PerfectReceive%": "Tökéletes fogadás %"
-    }
-    table_df = table_df.rename(columns={k: v for k, v in rename_dict.items() if k in table_df.columns})
+    """Interaktív, szűrhető, rendezhető adattábla a játékosokról."""
 
-    # Kerekítés a szebb megjelenéshez
-    for col in ["Pont/meccs", "Ász/meccs", "Sánc/meccs"]:
-        if col in table_df.columns:
-            table_df[col] = table_df[col].round(2)
+    table_df = df[list(COLUMNS)].rename(columns=COLUMNS).copy()
 
-    # Szűrő widget (Csapatválasztó)
-    teams = ["Összes csapat"] + sorted(df["Team"].dropna().unique().tolist())
+    if table_df.empty:
+        return pn.Column(
+            pn.pane.Markdown("### Adattábla"),
+            pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
+        )
+
+    # --- Widgetek ---
     team_filter = pn.widgets.Select(
-        name="Csapat szűrő", 
-        options=teams, 
-        value="Összes csapat",
-        width=250
+        name="Csapat szűrő",
+        options=[ALL_TEAMS] + sorted(df["Team"].dropna().unique().tolist()),
+        value=ALL_TEAMS,
+        width=250,
+    )
+    search = pn.widgets.TextInput(
+        name="Játékos keresése", placeholder="pl. Pavliuk", width=250
     )
 
-    # A táblázat létrehozása (Tabulator)
+    # --- Igazítás: nevek balra, számok középre ---
+    align = {col: "center" for col in table_df.columns}
+    align.update({"Játékos": "left", "Csapat": "left"})
+
+    # --- Sávok a mennyiségi oszlopokban ---
+    formatters = {
+        col: {
+            "type": "progress",
+            "max": float(table_df[col].max()),
+            "color": BAR_COLOR,
+            "legend": True,
+        }
+        for col in BAR_COLUMNS
+    }
+
     tabulator = pn.widgets.Tabulator(
         table_df,
+        disabled=True,                 # az adatok nem szerkeszthetők
         pagination="local",
-        page_size=15, # Egyszerre 15 sort mutat, a többi lapozható
+        page_size=15,
         sizing_mode="stretch_width",
         theme="simple",
         show_index=False,
-        header_align="center",
-        text_align="center",
+        header_align=align,
+        text_align=align,
+        formatters=formatters,
+        widths={"Játékos": 220, "Csapat": 200},
+        sorters=[{"field": "Pontok", "dir": "desc"}],
     )
 
-    # A szűrő és a táblázat összekapcsolása
-    @pn.depends(team_filter, watch=True)
-    def update_table(selected_team):
-        if selected_team == "Összes csapat":
-            tabulator.value = table_df
-        else:
-            filtered_df = table_df[table_df["Csapat"] == selected_team]
-            tabulator.value = filtered_df
+    # Csapat + név szűrés: beépített szűrő, a rendezés és a lapozás megmarad
+    tabulator.add_filter(
+        pn.bind(_filter, team=team_filter, query=search.param.value_input)
+    )
+
+    def _count(team: str, query: str):
+        n = len(_filter(table_df, team, query))
+        return pn.pane.Markdown(f"Találatok: **{n}** / {len(table_df)} játékos")
 
     return pn.Column(
-        pn.pane.Markdown("### 📋 Adattábla"),
+        pn.pane.Markdown("### Adattábla"),
         pn.pane.Markdown(
-            "_A szezon összes releváns játékosa. Az oszlopok fejléceire kattintva "
-            "rendezhető a táblázat, a mezőkben pedig kereshető._"
+            "_A szezon releváns játékosai (legalább 6 meccs és 8 szett). A fejlécre "
+            "kattintva rendezhető, a csapatválasztóval és a névkeresővel szűrhető. "
+            "A Pontok, Ászok és Pontblokk oszlopokban a sáv az oszlop legnagyobb "
+            "értékéhez viszonyít. A Támadás % a kill-arány (kill / összes támadás), "
+            "a Pontblokk a pontot érő blokkok száma. Az üres cella azt jelenti, hogy "
+            "nincs adat (pl. a játékos nem támad vagy nem fogad)._"
         ),
-        pn.Row(team_filter),
+        pn.Row(team_filter, search, pn.bind(_count, team_filter, search.param.value_input)),
         tabulator,
     )
