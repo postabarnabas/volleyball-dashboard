@@ -15,8 +15,8 @@ def create_scatter_serve(df: pd.DataFrame) -> pn.Column:
     base_df = df[df["ServeTotal"] > 0].copy()
 
     if base_df.empty:
-        return pn.Column(
-            pn.pane.Markdown("### Nyitás: kockázat vs. hatékonyság"),
+                return pn.Column(
+            pn.pane.Markdown("<h1 style='text-align: center;'>Nyitás: kockázat vs. hatékonyság</h1>", sizing_mode="stretch_width"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
@@ -115,8 +115,8 @@ def create_scatter_serve(df: pd.DataFrame) -> pn.Column:
         caption = pn.pane.Markdown(
             f"_Megjelenítve: **{len(plot_df)}** játékos a {len(df)}-ból "
             f"(min. {min_s} nyitás). A százalékok az összes nyitásra vonatkoznak. "
-            "A buborék mérete az összes nyitás: minél nagyobb, annál megbízhatóbb "
-            "az adott pont. A szaggatott vonalak a megjelenített játékosok "
+            "A buborék mérete az összes nyitások száma "
+            "A szaggatott vonalak a megjelenített játékosok "
             "mediánját jelölik._"
         )
         return pn.Column(
@@ -125,7 +125,7 @@ def create_scatter_serve(df: pd.DataFrame) -> pn.Column:
         )
 
     return pn.Column(
-        pn.pane.Markdown("### Nyitás: kockázat vs. hatékonyság"),
+        pn.pane.Markdown("<h1 style='text-align: center;'>Nyitás: kockázat vs. hatékonyság</h1>", sizing_mode="stretch_width"),
         pn.Row(min_serves, team_select),
         pn.bind(_view, min_serves, team_select),
     )

@@ -18,7 +18,7 @@ def create_scatter(df: pd.DataFrame) -> pn.Column:
 
     if plot_base.empty:
         return pn.Column(
-            pn.pane.Markdown("### Támadás vs. Fogadás"),
+            pn.pane.Markdown("<h1 style='text-align: center;'>Támadás vs. Fogadás</h1>", sizing_mode="stretch_width"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
@@ -95,7 +95,7 @@ def create_scatter(df: pd.DataFrame) -> pn.Column:
         caption = pn.pane.Markdown(
             f"_Megjelenítve: **{len(plot_df)}** játékos a {len(df)}-ból. "
             "Csak azok szerepelnek, akiknek a támadás % és a tökéletes fogadás % "
-            "is megvan és nagyobb nullánál. A buborék mérete az összpontszám. "
+            "is megvan és nagyobb nullánál. A buborék mérete a szerzett pontok számával arányos. "
             "A szaggatott vonalak a megjelenített játékosok mediánját jelölik._"
         )
         return pn.Column(
@@ -104,7 +104,7 @@ def create_scatter(df: pd.DataFrame) -> pn.Column:
         )
 
     return pn.Column(
-        pn.pane.Markdown("### Támadás vs. Fogadás"),
+        pn.pane.Markdown("<h1 style='text-align: center;'>Támadás vs. Fogadás</h1>", sizing_mode="stretch_width"),
         pn.Row(team_select),
         pn.bind(_view, team_select),
     )

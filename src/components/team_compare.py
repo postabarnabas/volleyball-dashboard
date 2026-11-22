@@ -13,15 +13,15 @@ RECEIVE_COLS = ["R=", "R!", "R/", "R-", "R+", "R#"]
 
 # num / den: a team_table oszlopai; scale: 100 a százalékhoz
 METRICS = {
-    "Támadás % (kill-arány)": dict(
+    "Támadás %": dict(
         num="kills", den="attacks", scale=100, unit="%", higher_better=True,
         num_label="kill", den_label="támadás",
-        desc="Csapat összes kill (A#) / csapat összes támadása.",
+        desc="Csapat összes pontja / csapat összes támadásának száma.",
     ),
     "Tökéletes fogadás %": dict(
         num="perfect_rec", den="receptions", scale=100, unit="%", higher_better=True,
         num_label="tökéletes fogadás", den_label="fogadás",
-        desc="Csapat összes tökéletes fogadása (R#) / csapat összes fogadása.",
+        desc="Csapat összes tökéletes fogadása / csapat összes fogadásának száma.",
     ),
     "Ász / szett": dict(
         num="aces", den="sets", scale=1, unit="", higher_better=True,
@@ -60,7 +60,7 @@ def _team_table(df: pd.DataFrame) -> pd.DataFrame:
 def create_team_compare(df: pd.DataFrame) -> pn.Column:
     if df.empty:
         return pn.Column(
-            pn.pane.Markdown("### Csapat-összehasonlítás"),
+            pn.pane.Markdown("<h1 style='text-align: center;'>Csapat-összehasonlítás</h1>", sizing_mode="stretch_width"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
@@ -138,8 +138,7 @@ def create_team_compare(df: pd.DataFrame) -> pn.Column:
         caption = pn.pane.Markdown(
             f"_{m['desc']} A csapatok a legjobbtól a leggyengébbig vannak rendezve"
             f"{'' if m['higher_better'] else ' (itt a kevesebb a jobb)'}. "
-            "A százalékok súlyozottak (összes találat / összes kísérlet), nem a "
-            "játékosok százalékainak átlaga. A szaggatott vonal a bajnokság "
+            " A szaggatott vonal a bajnokság "
             "összesített átlaga. A szettszám a csapat legtöbbet játszó "
             "játékosának szettjeiből becsült._"
         )
@@ -149,7 +148,7 @@ def create_team_compare(df: pd.DataFrame) -> pn.Column:
         )
 
     return pn.Column(
-        pn.pane.Markdown("### Csapat-összehasonlítás"),
+        pn.pane.Markdown("<h1 style='text-align: center;'>Csapat-összehasonlítás</h1>", sizing_mode="stretch_width"),
         pn.Row(metric_select, team_select),
         pn.bind(_view, metric_select, team_select),
     )

@@ -34,7 +34,7 @@ def create_map(df: pd.DataFrame) -> pn.Column:
 
     if df.empty:
         return pn.Column(
-            pn.pane.Markdown("### Csapatok földrajzi elhelyezkedése"),
+            pn.pane.Markdown("<h1 style='text-align: center;'>Csapatok földrajzi elhelyezkedése</h1>", sizing_mode="stretch_width"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
@@ -93,12 +93,11 @@ def create_map(df: pd.DataFrame) -> pn.Column:
         return pn.pane.Plotly(fig, config={"responsive": True})
 
     return pn.Column(
-        pn.pane.Markdown("### Csapatok földrajzi elhelyezkedése"),
+        pn.pane.Markdown("<h1 style='text-align: center;'>Csapatok földrajzi elhelyezkedése</h1>", sizing_mode="stretch_width"),
         pn.pane.Markdown(
             "_A jelölők mérete mindenhol azonos, és nem hordoz jelentést, a szín csak "
-            "azonosít (ugyanaz, mint a többi diagramon). Hover-rel látható a csapat "
-            "kerete és teljesítménye. A mérkőzés- és szettszám becslés: a legtöbbet "
-            "játszó játékos adatából. „Rendszeres” = legalább 6 mérkőzés és 8 szett._"
+            "azonosít. Hover-rel látható a csapat "
+            "kerete és teljesítménye. „Rendszeres” = legalább 8 mérkőzés és 5 szett._"
         ),
         pn.Row(team_select),
         pn.bind(_view, team_select),

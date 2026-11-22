@@ -128,7 +128,7 @@ def create_radar(df: pd.DataFrame) -> pn.Column:
 
     if len(eligible) < 2:
         return pn.Column(
-            pn.pane.Markdown("### Játékos-profil"),
+            pn.pane.Markdown("<h1 style='text-align: center;'>Játékos-profil</h1>", sizing_mode="stretch_width"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
@@ -149,7 +149,7 @@ def create_radar(df: pd.DataFrame) -> pn.Column:
         )
 
     return pn.Column(
-        pn.pane.Markdown("### Játékos-profil"),
+        pn.pane.Markdown("<h1 style='text-align: center;'>Játékos-profil</h1>", sizing_mode="stretch_width"),
         pn.pane.Markdown(
             "_Minden tengely **percentilis**: azt mutatja, a liga játékosainak hány százalékánál "
             "jobb az adott elemben (100 = a legjobb, a szaggatott kör a mediánszint). "
@@ -159,8 +159,7 @@ def create_radar(df: pd.DataFrame) -> pn.Column:
             f"Csak az a {len(eligible)} játékos választható, akinek mindhárom elemből van elég "
             "kísérlete, így a profil nem tartalmaz hiányzó tengelyt. "
             "A percentilis a sorrendet mutatja, a különbség nagyságát nem: ezt a hover és a "
-            "táblázat nyers értékei adják. A szerepkört nem veszi figyelembe "
-            "(pl. a középblokkolók támadását is a többiekéhez mérjük)._"
+            "táblázat nyers értékei adják._"
         ),
         pn.Row(player1, player2),
         pn.bind(_view, player1, player2),

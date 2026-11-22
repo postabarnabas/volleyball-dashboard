@@ -42,7 +42,7 @@ def create_data_table(df: pd.DataFrame) -> pn.Column:
 
     if table_df.empty:
         return pn.Column(
-            pn.pane.Markdown("### Adattábla"),
+            pn.pane.Markdown("<h1 style='text-align: center;'>Adattábla</h1>", sizing_mode="stretch_width"),
             pn.pane.Markdown("_Nincs elég adat a megjelenítéshez._"),
         )
 
@@ -97,13 +97,13 @@ def create_data_table(df: pd.DataFrame) -> pn.Column:
         return pn.pane.Markdown(f"Találatok: **{n}** / {len(table_df)} játékos")
 
     return pn.Column(
-        pn.pane.Markdown("### Adattábla"),
+        pn.pane.Markdown("<h1 style='text-align: center;'>Adattábla</h1>", sizing_mode="stretch_width"),
         pn.pane.Markdown(
             "_A szezon releváns játékosai (legalább 6 meccs és 8 szett). A fejlécre "
             "kattintva rendezhető, a csapatválasztóval és a névkeresővel szűrhető. "
             "A Pontok, Ászok és Pontblokk oszlopokban a sáv az oszlop legnagyobb "
-            "értékéhez viszonyít. A Támadás % a kill-arány (kill / összes támadás), "
-            "a Pontblokk a pontot érő blokkok száma. Az üres cella azt jelenti, hogy "
+            "értékéhez viszonyít. "
+            "Az üres cella azt jelenti, hogy "
             "nincs adat (pl. a játékos nem támad vagy nem fogad)._"
         ),
         pn.Row(team_filter, search, pn.bind(_count, team_filter, search.param.value_input)),
