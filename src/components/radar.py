@@ -12,7 +12,7 @@ RECEIVE_COLS = ["R=", "R!", "R/", "R-", "R+", "R#"]
 
 # (felirat, oszlop, nagyobb_a_jobb, egység, a sokaságot szűrő mennyiség)
 RADAR_METRICS = [
-    ("Támadás % (kill)", "Attack%", True, "%", "AttackTotal"),
+    ("Támadás %", "Attack%", True, "%", "AttackTotal"),
     ("Támadási hiba %", "AttackError%", False, "%", "AttackTotal"),
     ("Ász %", "Ace%", True, "%", "ServeTotal"),
     ("Rontott nyitás %", "ServeError%", False, "%", "ServeTotal"),
