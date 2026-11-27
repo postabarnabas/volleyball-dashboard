@@ -70,7 +70,7 @@ def create_map(df: pd.DataFrame) -> pn.Column:
 
         # Fix méretű jelölők: a méret nem hordoz jelentést
         fig.update_traces(
-            marker=dict(size=16, opacity=0.9),
+            marker=dict(size=27, opacity=0.9),
             hovertemplate=(
                 "<b>%{customdata[0]}</b> (%{customdata[1]})<br>"
                 "Mérkőzések: %{customdata[2]} · Szettek: %{customdata[3]}<br>"
